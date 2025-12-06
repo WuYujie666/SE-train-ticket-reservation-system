@@ -113,6 +113,19 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- 支付宝SDK依赖 -->
+		<dependency>
+			<groupId>com.alipay.sdk</groupId>
+			<artifactId>alipay-sdk-java</artifactId>
+			<version>4.34.0.ALL</version>
+		</dependency>
+
+		<!-- fastjson依赖 -->
+		<dependency>
+			<groupId>com.alibaba</groupId>
+			<artifactId>fastjson</artifactId>
+			<version>1.2.83</version>
+		</dependency>
 
 	</dependencies>
 

@@ -28,6 +28,8 @@ import com.safvan.exception.restapi.train.ApiTrainNotFoundException;
 import com.safvan.service.mvc.IBookingService;
 import com.safvan.service.mvc.ILoginManagementService;
 import com.safvan.service.mvc.ITrainService;
+import com.safvan.util.PayUtil;
+import com.alipay.api.AlipayApiException;
 
 /**
  * UserController handles operations related to user or customer functionality.
@@ -43,348 +45,432 @@ import com.safvan.service.mvc.ITrainService;
 @RequestMapping(UserEndpoints.USER_BASE_URI)
 public class UserController {
 
-	@Autowired
-	private ITrainService trainService;
+    @Autowired
+    private ITrainService trainService;
 
-	@Autowired
-	private IBookingService bookingService;
+    @Autowired
+    private IBookingService bookingService;
 
-	@Autowired
-	private ServletContext servletContext;
+    @Autowired
+    private ServletContext servletContext;
 
-	@Autowired
-	private ILoginManagementService loginManagementService;
+    @Autowired
+    private ILoginManagementService loginManagementService;
 
-	/**
-	 * Shows the home page for the user.
-	 * 
-	 * @return The view name for the user home page.
-	 */
-	@GetMapping(value = { "/", UserEndpoints.SHOW_HOME })
-	public String showHomePage() {
-		return "user/user_home";
-	}
+    @Autowired
+    private PayUtil payUtil;
 
-	/**
-	 * Displays all available trains to the user.
-	 * 
-	 * @param model The model object to pass data to the view.
-	 * @return The view name for displaying all trains.
-	 */
-	@GetMapping(UserEndpoints.VIEW_ALL_TRAINS)
-	public String viewAllTrainsForward(Map<String, Object> model) {
+    /**
+     * Shows the home page for the user.
+     * 
+     * @return The view name for the user home page.
+     */
+    @GetMapping(value = { "/", UserEndpoints.SHOW_HOME })
+    public String showHomePage() {
+        return "user/user_home";
+    }
 
-		System.out.println("UserController.viewAllTrainsForward()");
+    /**
+     * Displays all available trains to the user.
+     * 
+     * @param model The model object to pass data to the view.
+     * @return The view name for displaying all trains.
+     */
+    @GetMapping(UserEndpoints.VIEW_ALL_TRAINS)
+    public String viewAllTrainsForward(Map<String, Object> model) {
 
-		List<Train> trainsList = trainService.getAllTrains();
+        System.out.println("UserController.viewAllTrainsForward()");
 
-		trainsList.forEach(System.out::println);
+        List<Train> trainsList = trainService.getAllTrains();
 
-		// writing page heading and setting data to request scope
-		model.put("pageHeading", "All Available running Trains - displaying to user..");
-		model.put("trainsList", trainsList);
+        trainsList.forEach(System.out::println);
 
-		return "user/view_trains";
-	}
+        // writing page heading and setting data to request scope
+        model.put("pageHeading", "All Available running Trains - displaying to user..");
+        model.put("trainsList", trainsList);
 
-	/**
-	 * Forwards to the form for searching trains between stations or finding train
-	 * fare between stations based on the requested URL.
-	 * 
-	 * It determines the functionality based on the requested URL and sets the
-	 * appropriate form field names and button labels in the model. The form is
-	 * designed to be dynamic, allowing the button names to change based on
-	 * requirements.
-	 * 
-	 * @param model   The model object to pass data to the view.
-	 * @param request The HTTP request object.
-	 * @return The view name for the trains between stations form.
-	 */
-	@GetMapping(value = { UserEndpoints.SHOW_FIND_TRAINS_BETWEEN_TWO_STATIONS_FORM,
-			UserEndpoints.SHOW_TRAIN_FAIR_ENQUERY_FORM })
-	public String findTrainsbetweenStaionsForward
-			(Map<String, Object> model, 
-			HttpServletRequest request) {
-		
-		System.out.println(request.getRequestURI());
+        return "user/view_trains";
+    }
 
-		String pageHeading;
-		String submitButtonValue;
+    /**
+     * Forwards to the form for searching trains between stations or finding train
+     * fare between stations based on the requested URL.
+     * 
+     * It determines the functionality based on the requested URL and sets the
+     * appropriate form field names and button labels in the model. The form is
+     * designed to be dynamic, allowing the button names to change based on
+     * requirements.
+     * 
+     * @param model   The model object to pass data to the view.
+     * @param request The HTTP request object.
+     * @return The view name for the trains between stations form.
+     */
+    @GetMapping(value = { UserEndpoints.SHOW_FIND_TRAINS_BETWEEN_TWO_STATIONS_FORM,
+            UserEndpoints.SHOW_TRAIN_FAIR_ENQUERY_FORM })
+    public String findTrainsbetweenStaionsForward(Map<String, Object> model,
+            HttpServletRequest request) {
 
-		if (request.getRequestURI().equals(servletContext.getContextPath() + "/user/findTrainsbetweenStaionsFwd")) {
-			pageHeading = "Search Trains Between Stations";
-			submitButtonValue = "SEARCH TRAINS";
-		} else {
-			pageHeading = "Train Fare Enquiry";
-			submitButtonValue = "SHOW FARE";
-		}
+        System.out.println(request.getRequestURI());
 
-		// passing page heading and button values
-		model.put("pageHeading", pageHeading);
-		model.put("submitButtonValue", submitButtonValue);
+        String pageHeading;
+        String submitButtonValue;
 
-		return "user/trains_btwn_stations_form";
-	}
+        if (request.getRequestURI().equals(servletContext.getContextPath() + "/user/findTrainsbetweenStaionsFwd")) {
+            pageHeading = "Search Trains Between Stations";
+            submitButtonValue = "SEARCH TRAINS";
+        } else {
+            pageHeading = "Train Fare Enquiry";
+            submitButtonValue = "SHOW FARE";
+        }
 
-	/**
-	 * Retrieves the list of trains between two stations based on the provided
-	 * station names and pass it to view for displaying.
-	 * 
-	 * This method handles the GET request for "/findTrainsbetweenStaions" URL. It
-	 * calls the train service to get the list of trains between the specified
-	 * stations. The page heading is set to display the stations being searched, and
-	 * the trains list is passed to the view.
-	 * 
-	 * @param fromStation The name of the starting station.
-	 * @param toStation   The name of the destination station.
-	 * @param model       The model object to pass list of trains to the view.
-	 * @return The view name for displaying the trains between stations.
-	 */
-	@GetMapping(UserEndpoints.FIND_TRAINS_BETWEEN_TWO_STATIONS_RESULT)
-	public String findTrainsbetweenStaions(
-			@RequestParam String fromStation, 
-			@RequestParam String toStation,
-			Map<String, Object> model) {
+        // passing page heading and button values
+        model.put("pageHeading", pageHeading);
+        model.put("submitButtonValue", submitButtonValue);
 
-		// Retrieve the list of trains between the specified stations
-		List<Train> trainsList = trainService.getTrainsBetweenStations(fromStation, toStation);
-		trainsList.forEach(System.out::println);
+        return "user/trains_btwn_stations_form";
+    }
 
-		// Set the page heading and trains list in the model to pass to view
-		model.put("pageHeading",
-				"Trains Between stations.." + fromStation.toUpperCase() + " & " + toStation.toUpperCase());
-		model.put("trainsList", trainsList);
+    /**
+     * Retrieves the list of trains between two stations based on the provided
+     * station names and pass it to view for displaying.
+     * 
+     * This method handles the GET request for "/findTrainsbetweenStaions" URL. It
+     * calls the train service to get the list of trains between the specified
+     * stations. The page heading is set to display the stations being searched, and
+     * the trains list is passed to the view.
+     * 
+     * @param fromStation The name of the starting station.
+     * @param toStation   The name of the destination station.
+     * @param model       The model object to pass list of trains to the view.
+     * @return The view name for displaying the trains between stations.
+     */
+    @GetMapping(UserEndpoints.FIND_TRAINS_BETWEEN_TWO_STATIONS_RESULT)
+    public String findTrainsbetweenStaions(
+            @RequestParam String fromStation,
+            @RequestParam String toStation,
+            Map<String, Object> model) {
 
-		return "user/view_trains";
-	}
+        // Retrieve the list of trains between the specified stations
+        List<Train> trainsList = trainService.getTrainsBetweenStations(fromStation, toStation);
+        trainsList.forEach(System.out::println);
 
-	/**
-	 * Displays the pre-booking form for a specific train.
-	 *
-	 * this handler method retrieves the train details selected entered by user
-	 * through form , This train details are stored in a TrainDTO object and added
-	 * to the model. This user entered details are then used in view to display
-	 * train_pre_booking_form.
-	 *
-	 * @param trainNo     The train number for which the user want to book and this
-	 *                    will be diplayed in train_pre_booking_form.
-	 * @param fromStation The name of the from station.
-	 * @param toStation   The name of the to station.
-	 * @param session     The HttpSession object.
-	 * @param model       The model object to pass data to the view.
-	 * @return The view name for the pre-booking form.
-	 */
-	@GetMapping(UserEndpoints.SHOW_TRAIN_PRE_BOOKING_FORM)
-	public String showPreBookingFormForTrain(
-			@RequestParam Long trainNo, 
-			@RequestParam String fromStation,
-			@RequestParam String toStation,
-			HttpSession session,
-			Map<String, Object> model) {
+        // Set the page heading and trains list in the model to pass to view
+        model.put("pageHeading",
+                "Trains Between stations.." + fromStation.toUpperCase() + " & " + toStation.toUpperCase());
+        model.put("trainsList", trainsList);
 
-		System.out.println("UserController.showPreBookingFormForTrain()+ " + trainNo);
+        return "user/view_trains";
+    }
 
-		// Create a TrainDTO object and set the train number,
-		// from station, and to station
-		TrainDTO trainDTO = new TrainDTO();
-		trainDTO.setTrainNo(trainNo);
-		trainDTO.setFromStation(fromStation);
-		trainDTO.setToStation(toStation);
+    /**
+     * Displays the pre-booking form for a specific train.
+     *
+     * this handler method retrieves the train details selected entered by user
+     * through form , This train details are stored in a TrainDTO object and added
+     * to the model. This user entered details are then used in view to display
+     * train_pre_booking_form.
+     *
+     * @param trainNo     The train number for which the user want to book and this
+     *                    will be diplayed in train_pre_booking_form.
+     * @param fromStation The name of the from station.
+     * @param toStation   The name of the to station.
+     * @param session     The HttpSession object.
+     * @param model       The model object to pass data to the view.
+     * @return The view name for the pre-booking form.
+     */
+    @GetMapping(UserEndpoints.SHOW_TRAIN_PRE_BOOKING_FORM)
+    public String showPreBookingFormForTrain(
+            @RequestParam Long trainNo,
+            @RequestParam String fromStation,
+            @RequestParam String toStation,
+            HttpSession session,
+            Map<String, Object> model) {
 
-		// get the user details to display in prebookig form
-		String sessionId = session.getAttribute("sessionId").toString();
-		User user = loginManagementService.getUserbySessionId(sessionId);
+        System.out.println("UserController.showPreBookingFormForTrain()+ " + trainNo);
 
-		// Store the TrainDTO object and user details in the model
-		model.put("preBookingDetails", trainDTO);
-		model.put("user", user);
+        // Create a TrainDTO object and set the train number,
+        // from station, and to station
+        TrainDTO trainDTO = new TrainDTO();
+        trainDTO.setTrainNo(trainNo);
+        trainDTO.setFromStation(fromStation);
+        trainDTO.setToStation(toStation);
 
-		return "user/train_pre_booking_form";
-	}
+        // get the user details to display in prebookig form
+        String sessionId = session.getAttribute("sessionId").toString();
+        User user = loginManagementService.getUserbySessionId(sessionId);
 
-	/**
-	 * Proceeds with the train booking for the user.
-	 *
-	 * It receives the TicketDTO object containing the booking details trainNo,from
-	 * and to station ,seatType,berthPreference etc... as request parameters. A
-	 * TrainDTO object is created and populated with the train number, from station,
-	 * and to station. The TicketDTO and TrainDTO objects are added to the model.
-	 * The view "user/payment_inputs_form" is returned to display the payment inputs
-	 * form.
-	 *
-	 * @param ticketDTO   The TicketDTO object containing the booking details
-	 *                    including seatType,berthPreference etc...
-	 * @param trainNo     The train number.
-	 * @param fromStation The from station.
-	 * @param toStation   The to station.
-	 * @param model       The model object to pass data to the view.
-	 * @return The view name for the payment inputs form.
-	 */
-	@PostMapping(UserEndpoints.PROCEED_TRAIN_BOOKING)
-	public String proceedTrainBookingForUser(
-			@ModelAttribute TicketDTO ticketDTO, 
-			@RequestParam Long trainNo,
-			@RequestParam String fromStation, 
-			@RequestParam String toStation, 
-			Map<String, Object> model) {
+        // Store the TrainDTO object and user details in the model
+        model.put("preBookingDetails", trainDTO);
+        model.put("user", user);
 
-		// Create a TrainDTO object and set the train number,
-		// from station, and to station
-		TrainDTO trainDTO = new TrainDTO();
-		trainDTO.setTrainNo(trainNo);
-		trainDTO.setFromStation(fromStation);
-		trainDTO.setToStation(toStation);
+        return "user/train_pre_booking_form";
+    }
 
-		model.put("ticketDTO", ticketDTO);
-		model.put("trainDTO", trainDTO);
+    /**
+     * Proceeds with the train booking for the user.
+     *
+     * It receives the TicketDTO object containing the booking details trainNo,from
+     * and to station ,seatType,berthPreference etc... as request parameters. A
+     * TrainDTO object is created and populated with the train number, from station,
+     * and to station. The TicketDTO and TrainDTO objects are added to the model.
+     * The view "user/payment_inputs_form" is returned to display the payment inputs
+     * form.
+     *
+     * @param ticketDTO   The TicketDTO object containing the booking details
+     *                    including seatType,berthPreference etc...
+     * @param trainNo     The train number.
+     * @param fromStation The from station.
+     * @param toStation   The to station.
+     * @param model       The model object to pass data to the view.
+     * @return The view name for the payment inputs form.
+     */
+    @PostMapping(UserEndpoints.PROCEED_TRAIN_BOOKING)
+    public String proceedTrainBookingForUser(
+            @ModelAttribute TicketDTO ticketDTO,
+            @RequestParam Long trainNo,
+            @RequestParam String fromStation,
+            @RequestParam String toStation,
+            Map<String, Object> model) {
 
-		return "user/payment_inputs_form";
-	}
+        // Create a TrainDTO object and set the train number,
+        // from station, and to station
+        TrainDTO trainDTO = new TrainDTO();
+        trainDTO.setTrainNo(trainNo);
+        trainDTO.setFromStation(fromStation);
+        trainDTO.setToStation(toStation);
 
-	/**
-	 * Confirms the train booking for the user and perfroms train booking.
-	 * 
-	 * this method receives the TrainDTO object containing the train details and the
-	 * TicketDTO object containing the booking details. this details are then used
-	 * for booking train.
-	 * 
-	 * @param trainDTO  The TrainDTO object containing the train details.
-	 * @param ticketDTO The TicketDTO object containing the booking details.
-	 * @param session   the HttpSession Object.
-	 * @param model     The model object to pass ticketBookingResult object to the
-	 *                  view.
-	 * @return The view name for the ticket booking result. * @throws
-	 * @throws ApiNoEnoughSeatsForBooking If there are not enough seats available on
-	 *                                    the train for booking.
-	 * @throws ApiBookingFailedException  If an error occurs while booking the
-	 *                                    ticket.
-	 * 
-	 */
-	@PostMapping(UserEndpoints.CONFIRM_TRAIN_BOOKING)
-	public String confirmTrainBooking(
-			@ModelAttribute("trainDTO") TrainDTO trainDTO,
-			@ModelAttribute("ticketDTO") TicketDTO ticketDTO, 
-			HttpSession session, 
-			Map<String, Object> model) {
+        model.put("ticketDTO", ticketDTO);
+        model.put("trainDTO", trainDTO);
 
-		// Create new Train and Ticket objects and copy property values from TrainDTO
-		// and TicketDTO
-		Train train = new Train();
-		BeanUtils.copyProperties(trainDTO, train);
+        return "user/payment_inputs_form";
+    }
 
-		Ticket ticket = new Ticket();
-		BeanUtils.copyProperties(ticketDTO, ticket);
+    /**
+     * Confirms the train booking for the user and redirects to Alipay payment page.
+     * 
+     * This method receives the TrainDTO object containing the train details and the
+     * TicketDTO object containing the booking details. It then prepares the payment
+     * request and redirects the user to Alipay's payment page.
+     * 
+     * @param trainDTO  The TrainDTO object containing the train details.
+     * @param ticketDTO The TicketDTO object containing the booking details.
+     * @param session   the HttpSession Object.
+     * @param model     The model object to store payment parameters.
+     * @return The Alipay payment page HTML response.
+     * @throws AlipayApiException If there's an error with Alipay API.
+     */
+    @PostMapping(UserEndpoints.CONFIRM_TRAIN_BOOKING)
+    public String confirmTrainBooking(
+            @ModelAttribute("trainDTO") TrainDTO trainDTO,
+            @ModelAttribute("ticketDTO") TicketDTO ticketDTO,
+            HttpSession session,
+            Map<String, Object> model) throws AlipayApiException {
 
-		// Set train details in the ticket object
-		ticket.setTrain(train);
+        // Store booking details in session for later use in callback
+        session.setAttribute("trainDTO", trainDTO);
+        session.setAttribute("ticketDTO", ticketDTO);
 
-		// retrive user details based on sesionId
-		String sessionId = session.getAttribute("sessionId").toString();
-		User user = loginManagementService.getUserbySessionId(sessionId);
+        // Prepare payment parameters
+        String outTradeNo = "TRADE_" + System.currentTimeMillis(); // Generate unique trade number
+        Float totalAmount = Float.parseFloat("100"); // Get fare from ticketDTO
+        String subject = "火车票预订 - " + trainDTO.getTrainNo() + "次列车";
 
-		// add user details to the ticket , before booking
-		ticket.setUser(user);
+        // Store trade number in session
+        session.setAttribute("outTradeNo", outTradeNo);
 
-		// Book the ticket using the bookingService
-		Ticket ticketBookingResult = bookingService.bookTicket(ticket);
+        // Call Alipay API to get payment page
+        String alipayForm = payUtil.sendRequestToAlipay(outTradeNo, totalAmount, subject);
 
-		// passing the bookings results to view
-		model.put("ticketBookingResult", ticketBookingResult);
+        // Return Alipay payment page
+        model.put("alipayForm", alipayForm);
+        return "user/alipay_payment_redirect";
+    }
 
-		return "user/ticket_booking_result";
-	}
+    /**
+     * Handles the payment success callback from Alipay.
+     * 
+     * This method is called when the user successfully completes payment on Alipay.
+     * It retrieves the booking details from session, completes the booking process,
+     * and displays the booking result.
+     * 
+     * @param session The HttpSession object containing stored booking details.
+     * @param model   The model object to pass ticketBookingResult to the view.
+     * @return The view name for the ticket booking result.
+     */
+    @GetMapping("/paymentSuccess")
+    public String paymentSuccess(HttpSession session, Map<String, Object> model) {
+        // This is the synchronous callback from Alipay
+        // The actual booking logic is the same as the asynchronous callback
+        return processPaymentSuccess(session, model);
+    }
 
-	/**
-	 * Retrieves and displays the ticket booking history for the currently logged-in
-	 * user.
-	 * 
-	 * @param session the HttpSession object to retrieve the user's session ID.
-	 * @param model   the model object to pass data to the view.
-	 * @return the view name for displaying the ticket booking history.
-	 */
-	@GetMapping(UserEndpoints.SHOW_TICKET_BOOKING_HISTORY)
-	public String getAllTicketsBooked(
-			HttpSession session, 
-			Map<String, 
-			Object> model) {
+    /**
+     * Handles the asynchronous payment callback from Alipay server.
+     * 
+     * This method is called directly by Alipay server to notify the payment result.
+     * It should be exposed to the internet for Alipay server to access.
+     * 
+     * @param request The HttpServletRequest containing payment result parameters.
+     * @return A response string "success" to acknowledge receipt of the
+     *         notification.
+     */
+    @PostMapping("/alipay/notify")
+    public void alipayNotify(HttpServletRequest request, HttpSession session) {
+        // Get payment result parameters from Alipay
+        Map<String, String[]> params = request.getParameterMap();
 
-		// Retrieve user details of logged in user using sessionId.
-		String sessionId = session.getAttribute("sessionId").toString();
-		User user = loginManagementService.getUserbySessionId(sessionId);
+        // Here you should verify the signature of the parameters to ensure they are
+        // from Alipay
+        // For simplicity, we'll skip signature verification in this example
 
-		// Retrieve the list of tickets booked by the user
-		List<Ticket> ticketsList = bookingService.getTicketsByUser(user);
+        // Check if payment was successful
+        String tradeStatus = params.get("trade_status")[0];
 
-		model.put("pageHeading", "Ticket Booking History");
-		model.put("ticketsList", ticketsList);
+        if ("TRADE_SUCCESS".equals(tradeStatus) || "TRADE_FINISHED".equals(tradeStatus)) {
+            // Get trade number
+            String outTradeNo = params.get("out_trade_no")[0];
 
-		return "user/view_all_tickets";
-	}
+            // You can store this trade number in session or database to associate with
+            // booking
+            // For this example, we'll just log it
+            System.out.println("Payment successful for trade: " + outTradeNo);
 
-	/**
-	 * Shows the train number input form for checking seat availability or searching
-	 * a train by number.
-	 * 
-	 * Depending on the requested URL, it sets the appropriate page heading and
-	 * submit button value in the model for rendering the form.
-	 * 
-	 * @param request The HttpServletRequest object containing the request
-	 *                information.
-	 * 
-	 * @param model   The model object to pass page heading and button values to the
-	 *                view for dynamic form generation.
-	 * 
-	 * @return The view name for the train number input form.
-	 */
-	@GetMapping(value = { 
-			UserEndpoints.SHOW_TRAIN_SEATS_AVAILABILITY_CHECK_FORM,
-			UserEndpoints.SHOW_SEARCH_TRAIN_BY_NUMBER_FORM }
-	)
-	public String showTrainNumberinputForm(
-			HttpServletRequest request, 
-			Map<String, Object> model) {
+            // You might want to implement additional logic here, such as:
+            // 1. Updating payment status in database
+            // 2. Sending confirmation emails
+            // 3. Handling any post-payment processing
+        }
+    }
 
-		String pageHeading;
-		String submitButtonValue;
+    /**
+     * Common method to process payment success.
+     * 
+     * @param session The HttpSession object containing stored booking details.
+     * @param model   The model object to pass ticketBookingResult to the view.
+     * @return The view name for the ticket booking result.
+     */
+    private String processPaymentSuccess(HttpSession session, Map<String, Object> model) {
+        // Retrieve booking details from session
+        TrainDTO trainDTO = (TrainDTO) session.getAttribute("trainDTO");
+        TicketDTO ticketDTO = (TicketDTO) session.getAttribute("ticketDTO");
+        String outTradeNo = (String) session.getAttribute("outTradeNo");
 
-		if (request.getRequestURI().equals("/user/trainSeatsAvailablityCheckFwd")) {
-			pageHeading = "Train Seats Availability Check !";
-			submitButtonValue = "CHECK SEATS AVAILABLE";
-		} else {
-			pageHeading = "Search Trains!";
-			submitButtonValue = "SEARCH TRAIN";
-		}
+        // Create new Train and Ticket objects and copy property values from TrainDTO
+        // and TicketDTO
+        Train train = new Train();
+        BeanUtils.copyProperties(trainDTO, train);
 
-		// Set the page heading and trains list in the model to pass to view
-		model.put("pageHeading", pageHeading);
-		model.put("submitButtonValue", submitButtonValue);
+        Ticket ticket = new Ticket();
+        BeanUtils.copyProperties(ticketDTO, ticket);
 
-		return "user/train_number_input_form";
-	}
+        // Set train details in the ticket object
+        ticket.setTrain(train);
 
-	/**
-	 * Searches for a train by its number and displays its details.
-	 *
-	 * It retrieves the train information based on the provided train number using
-	 * the trainService.
-	 *
-	 * @param trainNo The train number to search for.
-	 * @param model   The model object to pass data to the view.
-	 * @return The view name for displaying the train details.
-	 * @throws ApiTrainNotFoundException If the train is not found.
-	 */
-	@GetMapping(UserEndpoints.SEARCH_TRAIN_BY_NUMBER_RESULT)
-	public String searchTrainByNumber(
-			@RequestParam Long trainNo, 
-			Map<String, 
-			Object> model) {
+        // Retrieve user details based on sessionId
+        String sessionId = session.getAttribute("sessionId").toString();
+        User user = loginManagementService.getUserbySessionId(sessionId);
 
-		// retrive train details based on train number
-		Train train = trainService.getTrainByNumber(trainNo);
+        // Add user details and transaction ID to the ticket
+        ticket.setUser(user);
+        ticket.setTransactionId(outTradeNo);
 
-		model.put("train", train);
+        // Book the ticket using the bookingService
+        Ticket ticketBookingResult = bookingService.bookTicket(ticket);
 
-		return "user/display_train_details";
-	}
+        // Pass the booking results to view
+        model.put("ticketBookingResult", ticketBookingResult);
+
+        return "user/ticket_booking_result";
+    }
+
+    /**
+     * Retrieves and displays the ticket booking history for the currently logged-in
+     * user.
+     * 
+     * @param session the HttpSession object to retrieve the user's session ID.
+     * @param model   the model object to pass data to the view.
+     * @return the view name for displaying the ticket booking history.
+     */
+    @GetMapping(UserEndpoints.SHOW_TICKET_BOOKING_HISTORY)
+    public String getAllTicketsBooked(
+            HttpSession session,
+            Map<String, Object> model) {
+
+        // Retrieve user details of logged in user using sessionId.
+        String sessionId = session.getAttribute("sessionId").toString();
+        User user = loginManagementService.getUserbySessionId(sessionId);
+
+        // Retrieve the list of tickets booked by the user
+        List<Ticket> ticketsList = bookingService.getTicketsByUser(user);
+
+        model.put("pageHeading", "Ticket Booking History");
+        model.put("ticketsList", ticketsList);
+
+        return "user/view_all_tickets";
+    }
+
+    /**
+     * Shows the train number input form for checking seat availability or searching
+     * a train by number.
+     * 
+     * Depending on the requested URL, it sets the appropriate page heading and
+     * submit button value in the model for rendering the form.
+     * 
+     * @param request The HttpServletRequest object containing the request
+     *                information.
+     * 
+     * @param model   The model object to pass page heading and button values to the
+     *                view for dynamic form generation.
+     * 
+     * @return The view name for the train number input form.
+     */
+    @GetMapping(value = {
+            UserEndpoints.SHOW_TRAIN_SEATS_AVAILABILITY_CHECK_FORM,
+            UserEndpoints.SHOW_SEARCH_TRAIN_BY_NUMBER_FORM })
+    public String showTrainNumberinputForm(
+            HttpServletRequest request,
+            Map<String, Object> model) {
+
+        String pageHeading;
+        String submitButtonValue;
+
+        if (request.getRequestURI().equals("/user/trainSeatsAvailablityCheckFwd")) {
+            pageHeading = "Train Seats Availability Check !";
+            submitButtonValue = "CHECK SEATS AVAILABLE";
+        } else {
+            pageHeading = "Search Trains!";
+            submitButtonValue = "SEARCH TRAIN";
+        }
+
+        // Set the page heading and trains list in the model to pass to view
+        model.put("pageHeading", pageHeading);
+        model.put("submitButtonValue", submitButtonValue);
+
+        return "user/train_number_input_form";
+    }
+
+    /**
+     * Searches for a train by its number and displays its details.
+     *
+     * It retrieves the train information based on the provided train number using
+     * the trainService.
+     *
+     * @param trainNo The train number to search for.
+     * @param model   The model object to pass data to the view.
+     * @return The view name for displaying the train details.
+     * @throws ApiTrainNotFoundException If the train is not found.
+     */
+    @GetMapping(UserEndpoints.SEARCH_TRAIN_BY_NUMBER_RESULT)
+    public String searchTrainByNumber(
+            @RequestParam Long trainNo,
+            Map<String, Object> model) {
+
+        // retrive train details based on train number
+        Train train = trainService.getTrainByNumber(trainNo);
+
+        model.put("train", train);
+
+        return "user/display_train_details";
+    }
 
 }
