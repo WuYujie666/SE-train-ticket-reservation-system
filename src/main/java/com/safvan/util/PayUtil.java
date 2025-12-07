@@ -24,9 +24,10 @@ public class PayUtil {
     // 签名方式
     private final String SIGN_TYPE = "RSA2";
     // 支付宝异步通知路径,付款完毕后会异步调用本项目的方法,必须为公网地址
-    private final String NOTIFY_URL = "http://x5b99d62.natappfree.cc/api/alipay/toSuccess";
+    private final String NOTIFY_URL = "http://x5b99d62.natappfree.cc/TRSApp/user/alipay/notify";
+
     // 支付宝同步通知路径,也就是当付款完毕后跳转本项目的页面,可以不是公网地址
-    private final String RETURN_URL = "http://localhost:9999/TRSApp/user/confirmTrainBooking";
+    private final String RETURN_URL = "http://localhost:9999/TRSApp/user/paymentSuccess";
 
     private AlipayClient alipayClient = null;
 
@@ -49,8 +50,8 @@ public class PayUtil {
                 "\"body\":\"" + body + "\"," +
                 "\"product_code\":\"FAST_INSTANT_TRADE_PAY\"}");
 
-        // 请求
-        String result = alipayClient.pageExecute(alipayRequest).getBody();
+        // 请求 - 添加"get"参数以指定请求方法
+        String result = alipayClient.pageExecute(alipayRequest, "get").getBody();
         System.out.println("返回的结果是：" + result);
         return result;
     }

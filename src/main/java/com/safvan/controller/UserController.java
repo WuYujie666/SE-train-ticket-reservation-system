@@ -25,6 +25,7 @@ import com.safvan.constants.endpoints.UserEndpoints;
 import com.safvan.exception.restapi.booking.ApiBookingFailedException;
 import com.safvan.exception.restapi.booking.ApiNoEnoughSeatsForBooking;
 import com.safvan.exception.restapi.train.ApiTrainNotFoundException;
+import com.safvan.exception.mvc.train.TrainNotFoundException;
 import com.safvan.service.mvc.IBookingService;
 import com.safvan.service.mvc.ILoginManagementService;
 import com.safvan.service.mvc.ITrainService;
@@ -239,6 +240,23 @@ public class UserController {
         trainDTO.setFromStation(fromStation);
         trainDTO.setToStation(toStation);
 
+        // Get complete train details from database including fare
+        try {
+            Train train = trainService.getTrainByNumber(trainNo);
+            if (train != null) {
+                trainDTO.setFare(train.getFare());
+
+                // Calculate total amount and set it to ticketDTO
+                if (train.getFare() != null && ticketDTO.getSeatsRequired() != null) {
+                    Double totalAmount = train.getFare() * ticketDTO.getSeatsRequired();
+                    ticketDTO.setTicketAmount(totalAmount);
+                }
+            }
+        } catch (TrainNotFoundException e) {
+            // Handle exception if needed
+            e.printStackTrace();
+        }
+
         model.put("ticketDTO", ticketDTO);
         model.put("trainDTO", trainDTO);
 
@@ -272,14 +290,19 @@ public class UserController {
 
         // Prepare payment parameters
         String outTradeNo = "TRADE_" + System.currentTimeMillis(); // Generate unique trade number
-        Float totalAmount = Float.parseFloat("100"); // Get fare from ticketDTO
+
+        Float totalAmount = ticketDTO.getTicketAmount().floatValue(); // Get fare from ticketDTO
         String subject = "火车票预订 - " + trainDTO.getTrainNo() + "次列车";
 
         // Store trade number in session
         session.setAttribute("outTradeNo", outTradeNo);
 
         // Call Alipay API to get payment page
-        String alipayForm = payUtil.sendRequestToAlipay(outTradeNo, totalAmount, subject);
+        String alipayForm = payUtil.sendRequestToAlipay(outTradeNo, totalAmount.floatValue(), subject);
+
+        // Debug: Print the generated Alipay form to check method parameter
+        System.out.println("Generated Alipay Form: ");
+        System.out.println(alipayForm);
 
         // Return Alipay payment page
         model.put("alipayForm", alipayForm);

@@ -190,6 +190,10 @@ pageEncoding="ISO-8859-1"%>
                 <p>
                     <strong>Seats Required:</strong> ${ticketDTO.seatsRequired}
                 </p>
+                <p><strong>Fare per Seat:</strong> ${trainDTO.fare} USD</p>
+                <p>
+                    <strong>Total Amount:</strong> ${ticketDTO.ticketAmount} USD
+                </p>
             </div>
 
             <form
@@ -227,6 +231,11 @@ pageEncoding="ISO-8859-1"%>
                     type="hidden"
                     name="seatType"
                     value="${ticketDTO.seatType}"
+                />
+                <input
+                    type="hidden"
+                    name="ticketAmount"
+                    value="${ticketDTO.ticketAmount}"
                 />
 
                 <div class="payment-method">
